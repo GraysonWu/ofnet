@@ -31,36 +31,36 @@ import (
 
 // Small subset of openflow fields we currently support
 type FlowMatch struct {
-	Priority    uint16            // Priority of the flow
-	InputPort   uint32            // Input port number
-	MacDa       *net.HardwareAddr // Mac dest
-	MacDaMask   *net.HardwareAddr // Mac dest mask
-	MacSa       *net.HardwareAddr // Mac source
-	MacSaMask   *net.HardwareAddr // Mac source mask
-	Ethertype   uint16            // Ethertype
-	VlanId      uint16            // vlan id
-	ArpOper     uint16            // ARP Oper type
-	ArpSha      *net.HardwareAddr // ARP source host address
-	ArpTha      *net.HardwareAddr // ARP target host address
-	ArpSpa      *net.IP           // ARP source protocol address
-	ArpTpa      *net.IP           // ARP target protocol address
-	IpSa        *net.IP           // IPv4 source addr
-	IpSaMask    *net.IP           // IPv4 source mask
-	IpDa        *net.IP           // IPv4 dest addr
-	IpDaMask    *net.IP           // IPv4 dest mask
-	CtIpSa      *net.IP           // IPv4 source addr in ct
-	CtIpSaMask  *net.IP           // IPv4 source mask in ct
-	CtIpDa      *net.IP           // IPv4 dest addr in ct
-	CtIpDaMask  *net.IP           // IPv4 dest mask in ct
-	CtIpv6Sa    *net.IP           // IPv6 source addr
-	CtIpv6Da    *net.IP           // IPv6 dest addr in ct
-	IpProto     uint8             // IP protocol
-	CtIpProto   uint8             // IP protocol in ct
-	IpDscp      uint8             // DSCP/TOS field
-	SrcPort     uint16            // Source port in transport layer
-	SrcPortMask *uint16           // Mask for source port in transport layer
-	DstPort     uint16            // Dest port in transport layer
-	DstPortMask *uint16           // Mask for dest port in transport layer
+	Priority      uint16               // Priority of the flow
+	InputPort     uint32               // Input port number
+	MacDa         *net.HardwareAddr    // Mac dest
+	MacDaMask     *net.HardwareAddr    // Mac dest mask
+	MacSa         *net.HardwareAddr    // Mac source
+	MacSaMask     *net.HardwareAddr    // Mac source mask
+	Ethertype     uint16               // Ethertype
+	VlanId        uint16               // vlan id
+	ArpOper       uint16               // ARP Oper type
+	ArpSha        *net.HardwareAddr    // ARP source host address
+	ArpTha        *net.HardwareAddr    // ARP target host address
+	ArpSpa        *net.IP              // ARP source protocol address
+	ArpTpa        *net.IP              // ARP target protocol address
+	IpSa          *net.IP              // IPv4 source addr
+	IpSaMask      *net.IP              // IPv4 source mask
+	IpDa          *net.IP              // IPv4 dest addr
+	IpDaMask      *net.IP              // IPv4 dest mask
+	CtIpSa        *net.IP              // IPv4 source addr in ct
+	CtIpSaMask    *net.IP              // IPv4 source mask in ct
+	CtIpDa        *net.IP              // IPv4 dest addr in ct
+	CtIpDaMask    *net.IP              // IPv4 dest mask in ct
+	CtIpv6Sa      *net.IP              // IPv6 source addr
+	CtIpv6Da      *net.IP              // IPv6 dest addr in ct
+	IpProto       uint8                // IP protocol
+	CtIpProto     uint8                // IP protocol in ct
+	IpDscp        uint8                // DSCP/TOS field
+	SrcPort       uint16               // Source port in transport layer
+	SrcPortMask   *uint16              // Mask for source port in transport layer
+	DstPort       uint16               // Dest port in transport layer
+	DstPortMask   *uint16              // Mask for dest port in transport layer
 	CtTpSrcPort   uint16               // Source port in the transport layer in ct
 	CtTpDstPort   uint16               // Dest port in the transport layer in ct
 	Icmp6Code     *uint8               // ICMPv6 code
@@ -107,10 +107,11 @@ type FlowAction struct {
 	resubmit     *Resubmit            // resubmit packet to a specific Table and port. Resubmit could also be a NextElem.
 	// If the packet is resubmitted to multiple ports, use resubmit as a FlowAction
 	// and the NextElem should be Empty.
-	learn      *FlowLearn    // nxm learn action
-	notes      []byte        // data to set in note action
-	controller *NXController // send packet to controller
-	nxOutput   *NXOutput     // output packet to a provided register
+	learn       *FlowLearn     // nxm learn action
+	notes       []byte         // data to set in note action
+	controller  *NXController  // send packet to controller
+	controller2 *NXController2 // pause flow and send packet to controller
+	nxOutput    *NXOutput      // output packet to a provided register
 }
 
 // State of a flow entry
@@ -1095,6 +1096,14 @@ func (self *Flow) installFlowActions(flowMod *openflow13.FlowMod,
 			}
 			addActn = true
 			log.Debugf("flow action: Added controller Action: %+v", act)
+		case ActTypeController2:
+			act := flowAction.controller2
+			err = actInstr.AddAction(act.GetActionMessage(), true)
+			if err != nil {
+				return err
+			}
+			addActn = true
+			log.Debugf("flow action: Added controller2 Action: %+v", act)
 		default:
 			log.Fatalf("Unknown action type %s", flowAction.ActionType)
 			return UnknownActionTypeError
@@ -1830,6 +1839,28 @@ func (self *Flow) Controller(reason uint8) error {
 		Reason:       reason,
 	}
 	action.ActionType = action.controller.GetActionType()
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	// Add to the action db
+	self.flowActions = append(self.flowActions, action)
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		return self.install()
+	}
+
+	return nil
+}
+
+func (self *Flow) Controller2(reason uint8) error {
+	action := new(FlowAction)
+	action.controller2 = &NXController2{
+		ControllerID: self.Table.Switch.ctrlID,
+		Reason:       reason,
+		Userdata:     0,
+		Pause:        true,
+	}
+	action.ActionType = action.controller2.GetActionType()
 	self.lock.Lock()
 	defer self.lock.Unlock()
 

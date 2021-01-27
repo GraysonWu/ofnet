@@ -47,6 +47,7 @@ const (
 	ActTypeNXLearn        = "learn"
 	ActTypeNXNote         = "note"
 	ActTypeController     = "controller"
+	ActTypeController2     = "controller2"
 	ActTypeOutput         = "output"
 	ActTypeNXOutput       = "nxOutput"
 )
@@ -595,6 +596,26 @@ func (a *NXController) GetActionMessage() openflow13.Action {
 
 func (a *NXController) GetActionType() string {
 	return ActTypeController
+}
+
+type NXController2 struct {
+	ControllerID uint16
+	Reason       uint8
+	Userdata     uint8
+	Pause        bool
+}
+
+func (a *NXController2) GetActionMessage() openflow13.Action {
+	action := openflow13.NewNXActionController2(a.ControllerID)
+	action.MaxLen = 128
+	action.Reason = a.Reason
+	action.Userdata = a.Userdata
+	action.Pause = a.Pause
+	return action
+}
+
+func (a *NXController2) GetActionType() string {
+	return ActTypeController2
 }
 
 type NXLoadXXRegAction struct {

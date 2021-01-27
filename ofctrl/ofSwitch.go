@@ -222,7 +222,10 @@ func (self *OFSwitch) receive() {
 
 // Handle openflow messages from the switch
 func (self *OFSwitch) handleMessages(dpid net.HardwareAddr, msg util.Message) {
-	log.Debugf("Received message: %+v, on switch: %s", msg, dpid.String())
+	log.Infof("==========================================================")
+	log.Infof("%s", msg)
+	log.Infof("==========================================================")
+	//log.Infof("Received message: %+v, on switch: %s", msg, dpid.String())
 
 	switch t := msg.(type) {
 	case *common.Header:
@@ -301,7 +304,7 @@ func (self *OFSwitch) handleMessages(dpid net.HardwareAddr, msg util.Message) {
 
 		}
 	case *openflow13.PacketIn:
-		log.Debugf("Received packet(ofctrl): %+v", t)
+		log.Infof("Received packet(ofctrl): %+v", t)
 		// send packet rcvd callback
 		self.app.PacketRcvd(self, (*PacketIn)(t))
 
